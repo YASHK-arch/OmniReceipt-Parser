@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Upload, X, Plus, AlertTriangle, Save, Loader2 } from "lucide-react";
+import LogViewer from "@/components/LogViewer";
 
 type LineItem = {
   id: string; // for React key
@@ -54,6 +55,11 @@ export default function Home() {
         ...item,
         id: Math.random().toString(36).substr(2, 9),
       }));
+
+      // Log any backend parsing error specifically
+      if (result._backendError) {
+        console.error("Backend LLM Error during parsing:", result._backendError);
+      }
 
       setData({
         merchant: result.merchant || "",
@@ -139,6 +145,8 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 md:p-8 relative">
+      <LogViewer />
+      
       {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium transition-all transform flex items-center gap-2 ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>

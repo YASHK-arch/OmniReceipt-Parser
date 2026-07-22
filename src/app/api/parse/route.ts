@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { groq } from "@ai-sdk/groq";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { NextResponse } from "next/server";
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     const { object } = await generateObject({
-      model: openai("gpt-4o-mini"),
+      model: groq("llama-3.2-90b-vision-preview"),
       schema: receiptSchema,
       messages: [
         {
@@ -56,6 +56,7 @@ export async function POST(req: Request) {
       date: new Date().toISOString().split("T")[0],
       lineItems: [],
       totalAmount: 0,
+      _backendError: error instanceof Error ? error.message : String(error),
     });
   }
 }
