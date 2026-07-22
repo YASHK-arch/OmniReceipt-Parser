@@ -1,4 +1,4 @@
-import { groq } from "@ai-sdk/groq";
+import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { NextResponse } from "next/server";
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     const { object } = await generateObject({
-      model: groq("llama-3.2-90b-vision-preview"),
+      model: google("gemini-2.5-flash"),
       schema: receiptSchema,
       messages: [
         {
