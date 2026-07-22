@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Upload, X, Plus, AlertTriangle, Save, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Upload, X, Plus, AlertTriangle, Save, Loader2, Sparkles, Code, Moon, Search, FileText } from "lucide-react";
 import LogViewer from "@/components/LogViewer";
 
 type LineItem = {
@@ -17,6 +17,15 @@ type ReceiptData = {
   lineItems: LineItem[];
 };
 
+type DBReceipt = {
+  id: string;
+  merchant: string;
+  date: string;
+  totalAmount: number;
+  createdAt: string;
+  lineItems: Omit<LineItem, 'id'>[];
+};
+
 export default function Home() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +33,30 @@ export default function Home() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // History state
+  const [history, setHistory] = useState<DBReceipt[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [selectedHistoryReceipt, setSelectedHistoryReceipt] = useState<DBReceipt | null>(null);
+
+  const fetchHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch("/api/receipts");
+      if (res.ok) {
+        const hData = await res.json();
+        setHistory(hData);
+      }
+    } catch (e) {
+      console.error("Failed to fetch history:", e);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
   const showToast = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
@@ -50,13 +83,11 @@ export default function Home() {
       });
       const result = await res.json();
       
-      // Add unique IDs to line items for the form
       const itemsWithIds = (result.lineItems || []).map((item: Omit<LineItem, "id">) => ({
         ...item,
         id: Math.random().toString(36).substr(2, 9),
       }));
 
-      // Log any backend parsing error specifically
       if (result._backendError) {
         console.error("Backend LLM Error during parsing:", result._backendError);
       }
@@ -81,7 +112,6 @@ export default function Home() {
   };
 
   const sumOfLineItems = data?.lineItems.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0;
-  // A small tolerance for floating point issues
   const mathMismatch = data ? Math.abs(sumOfLineItems - (data.totalAmount || 0)) > 0.01 : false;
 
   const handleSave = async () => {
@@ -96,10 +126,10 @@ export default function Home() {
       
       if (!res.ok) throw new Error("Failed to save");
 
-      // Reset
       setPreviewUrl(null);
       setData(null);
       showToast("Receipt saved successfully!", "success");
+      fetchHistory(); // Refresh history list
     } catch (err) {
       console.error(err);
       showToast("Failed to save receipt.", "error");
@@ -143,181 +173,353 @@ export default function Home() {
     });
   };
 
+  // Neo-brutalist style classes
+  const brutalContainer = "border-[3px] border-black rounded-xl shadow-[8px_8px_0_0_#000] bg-[#e4d4ff]";
+  const brutalBadge = "border-[2px] border-black rounded-md shadow-[2px_2px_0_0_#000] font-bold text-sm bg-[#cfaeff] px-3 py-1 hover:bg-[#b588ff] cursor-pointer transition-colors";
+
   return (
-    <main className="min-h-screen bg-gray-50 p-4 md:p-8 relative">
+    <div className="min-h-screen bg-[#f3edff] text-black font-sans flex flex-col border-[4px] border-black selection:bg-[#cfaeff]">
       <LogViewer />
       
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium transition-all transform flex items-center gap-2 ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
+        <div className={`fixed top-6 right-6 px-6 py-3 rounded-lg border-[3px] border-black shadow-[4px_4px_0_0_#000] z-50 font-bold transition-all ${toast.type === "success" ? "bg-[#a6f0c6]" : "bg-[#fca5a5]"}`}>
           {toast.message}
         </div>
       )}
-      
-      <div className="max-w-6xl mx-auto space-y-8">
-        <header className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">OmniReceipt Parser</h1>
-          <p className="text-gray-500 mt-2">Upload a receipt and verify the extracted data.</p>
-        </header>
 
-        {!previewUrl ? (
-          <div 
-            className="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center bg-white cursor-pointer hover:bg-gray-50 transition"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <p className="text-lg text-gray-600 font-medium">Click or drag receipt to upload</p>
-            <p className="text-sm text-gray-400 mt-1">Supports JPG, PNG</p>
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-            />
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Left Pane: Image */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                <h2 className="font-semibold text-gray-700">Original Receipt</h2>
-                <button 
-                  onClick={() => { setPreviewUrl(null); setData(null); }}
-                  className="p-1 hover:bg-gray-200 rounded text-gray-500 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-4 flex-1 overflow-auto bg-gray-100 flex items-start justify-center min-h-[500px]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previewUrl} alt="Receipt" className="max-w-full h-auto rounded shadow-sm" />
-              </div>
+      {/* Modal for History Item */}
+      {selectedHistoryReceipt && (
+        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="border-[4px] border-black bg-white rounded-xl shadow-[8px_8px_0_0_#000] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-4 border-b-[4px] border-black bg-[#cba8ff] flex justify-between items-center">
+              <h2 className="font-black text-xl flex items-center gap-2"><FileText className="w-5 h-5"/> Receipt Details</h2>
+              <button onClick={() => setSelectedHistoryReceipt(null)} className="p-1 hover:bg-black/10 rounded-lg transition-colors border-[2px] border-transparent hover:border-black hover:shadow-[2px_2px_0_0_#000]">
+                <X className="w-5 h-5" strokeWidth={3} />
+              </button>
             </div>
-
-            {/* Right Pane: Form */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
-              <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                <h2 className="font-semibold text-gray-700">Extracted Data</h2>
-                {loading && <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />}
+            <div className="p-6 overflow-auto bg-[#f8f6fc]">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="border-[3px] border-black p-4 rounded-xl bg-white shadow-[4px_4px_0_0_#000]">
+                  <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Merchant</div>
+                  <div className="font-black text-lg">{selectedHistoryReceipt.merchant || "Unknown"}</div>
+                </div>
+                <div className="border-[3px] border-black p-4 rounded-xl bg-white shadow-[4px_4px_0_0_#000]">
+                  <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Date</div>
+                  <div className="font-black text-lg">{selectedHistoryReceipt.date}</div>
+                </div>
               </div>
               
-              <div className="p-6 flex-1 overflow-auto">
-                {loading ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
-                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                    <p>Parsing receipt with AI...</p>
-                  </div>
-                ) : data ? (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Merchant Name</label>
-                        <input 
-                          type="text" 
-                          value={data.merchant} 
-                          onChange={(e) => setData({ ...data, merchant: e.target.value })}
-                          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <input 
-                          type="date" 
-                          value={data.date} 
-                          onChange={(e) => setData({ ...data, date: e.target.value })}
-                          className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
-                        />
-                      </div>
+              <div className="border-[3px] border-black rounded-xl overflow-hidden mb-6 shadow-[4px_4px_0_0_#000]">
+                <div className="bg-black text-white p-3 font-black uppercase tracking-widest text-sm flex justify-between">
+                  <span>Line Items</span>
+                  <span>Amount</span>
+                </div>
+                <div className="bg-white">
+                  {selectedHistoryReceipt.lineItems.map((item, i) => (
+                    <div key={i} className="flex justify-between items-center p-4 border-b-[3px] border-black last:border-0 hover:bg-[#f3edff] transition-colors">
+                      <span className="font-bold flex-1">{item.description}</span>
+                      <span className="font-black text-lg ml-4">${item.amount.toFixed(2)}</span>
                     </div>
+                  ))}
+                  {selectedHistoryReceipt.lineItems.length === 0 && (
+                    <div className="p-6 text-center font-bold text-gray-500 border-dashed border-2 border-gray-300 m-2 rounded-lg">No items recorded.</div>
+                  )}
+                </div>
+              </div>
 
-                    <div>
-                      <div className="flex justify-between items-end mb-2">
-                        <label className="block text-sm font-medium text-gray-700">Line Items</label>
-                        <button onClick={addLineItem} className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium">
-                          <Plus className="w-4 h-4 mr-1" /> Add Item
-                        </button>
+              <div className="border-[3px] border-black bg-[#fef08a] p-5 rounded-xl flex justify-between items-center shadow-[4px_4px_0_0_#000]">
+                <span className="font-black text-xl uppercase tracking-widest">Total Amount</span>
+                <span className="font-black text-3xl">${selectedHistoryReceipt.totalAmount.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logo */}
+      <div className="absolute top-6 left-8 z-50">
+        <div className="flex items-center font-black text-2xl tracking-tight">
+          <span>Omni</span>
+          <span className="text-[#9655ff]">Parser</span>
+        </div>
+      </div>
+
+      {/* Main Layout: Flex Container for Main Content and Sidebars */}
+      <div className="flex-1 w-full max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-8 pt-20 px-4 pb-20 relative z-10">
+        
+        {/* Left Sidebar: Edge Cases */}
+        <aside className="w-full lg:w-72 flex-shrink-0 order-2 lg:order-1">
+          <div className="border-[4px] border-black rounded-xl bg-[#a6f0c6] shadow-[8px_8px_0_0_#000] p-6 lg:sticky lg:top-20">
+            <h2 className="font-black text-2xl mb-4 leading-tight">Test Cases</h2>
+            <p className="font-bold text-sm mb-6 text-black/80">
+              Try out the standard sample receipt cases in the upload area, or test the parser's limits with these edge case samples:
+            </p>
+            <ul className="space-y-3">
+              {[
+                { name: "Crumpled Receipt", icon: "🗑️" },
+                { name: "Faded Ink Receipt", icon: "👻" },
+                { name: "Handwritten Note", icon: "✍️" },
+                { name: "Super Long Receipt", icon: "📜" },
+                { name: "Non-English Receipt", icon: "🌍" }
+              ].map((item, idx) => (
+                <li key={idx}>
+                  <a href="#" className="flex items-center gap-3 p-3 border-[3px] border-black bg-white rounded-lg hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0_0_#000] active:translate-y-0 active:translate-x-0 active:shadow-none transition-all font-bold text-sm">
+                    <span className="text-lg">{item.icon}</span> {item.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+
+        {/* Main Workspace Area */}
+        <main className="flex-1 flex flex-col items-center min-w-0 order-1 lg:order-2">
+          {/* Hero Section */}
+          <div className="text-center mb-12 relative z-10 w-full mt-8">
+            <h1 className="text-5xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-6 leading-tight">
+              Receipt to <br /> structured data
+            </h1>
+            <p className="text-gray-700 font-medium text-lg max-w-xl mx-auto">
+              Turn any physical receipt into structured JSON data. <br/>
+              Upload an image or take a picture to extract line items instantly.
+            </p>
+          </div>
+
+          {!previewUrl ? (
+            /* Upload State */
+            <div className={`${brutalContainer} w-full max-w-3xl p-8 relative z-10`}>
+              <div 
+                className="w-full border-[3px] border-dashed border-black bg-white rounded-xl p-10 flex flex-col items-center justify-center cursor-pointer hover:bg-[#f3edff] transition-all mb-8 shadow-[6px_6px_0_0_#000] active:translate-y-[2px] active:translate-x-[2px] active:shadow-[4px_4px_0_0_#000]"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="bg-[#cfaeff] p-4 rounded-full border-[3px] border-black mb-4 shadow-[4px_4px_0_0_#000]">
+                  <Upload className="w-8 h-8 text-black" strokeWidth={2.5} />
+                </div>
+                <p className="text-xl font-black text-black mb-1">Click to upload receipt</p>
+                <p className="text-sm font-bold text-gray-500">Supports JPG, PNG</p>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  ref={fileInputRef} 
+                  onChange={handleFileChange} 
+                />
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm font-bold text-gray-800 mb-3">Try these example receipts:</p>
+                <div className="flex flex-wrap gap-3">
+                  <button className={brutalBadge}>Walmart</button>
+                  <button className={brutalBadge}>Target</button>
+                  <button className={brutalBadge}>Whole Foods</button>
+                  <button className={brutalBadge}>Home Depot</button>
+                  <button className={brutalBadge}>Starbucks</button>
+                </div>
+              </div>
+
+              <div className="mt-8 border-[3px] border-black rounded-lg p-4 bg-[#f3edff] flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-black text-white font-black rounded-md flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold tracking-widest text-gray-600 uppercase mb-0.5">OPEN SOURCE</div>
+                    <p className="text-sm font-bold"><span className="text-black">YASHK-arch/OmniReceipt-Parser</span> <span className="text-gray-600 font-medium">/ Star the repository to show support.</span></p>
+                  </div>
+                </div>
+                <a href="https://github.com/YASHK-arch/OmniReceipt-Parser.git" target="_blank" rel="noopener noreferrer" className="text-sm font-bold flex items-center gap-1 hover:underline">View Repo ↗</a>
+              </div>
+            </div>
+          ) : (
+            /* Result State */
+            <div className="w-full relative z-10">
+              <button 
+                onClick={() => { setPreviewUrl(null); setData(null); }}
+                className="border-[3px] border-black rounded-lg hover:bg-gray-100 bg-white px-4 py-2 mb-6 flex items-center gap-2 text-sm font-bold shadow-[4px_4px_0_0_#000]"
+              >
+                <X className="w-4 h-4" /> Start Over
+              </button>
+              
+              <div className="grid lg:grid-cols-2 gap-8">
+                {/* Left Pane: Image */}
+                <div className="border-[4px] border-black bg-[#f8f6fc] rounded-xl flex flex-col overflow-hidden shadow-[8px_8px_0_0_#000]">
+                  <div className="p-4 border-b-[4px] border-black bg-[#cba8ff] flex justify-between items-center">
+                    <h2 className="font-black text-lg flex items-center gap-2"><FileText className="w-5 h-5"/> Original Receipt</h2>
+                  </div>
+                  <div className="p-6 flex-1 bg-[#f8f6fc] flex items-start justify-center min-h-[500px] overflow-auto">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={previewUrl} alt="Receipt" className="max-w-full h-auto border-[4px] border-black bg-white p-2 shadow-[6px_6px_0_0_#000]" />
+                  </div>
+                </div>
+
+                {/* Right Pane: Form (Terminal Style) */}
+                <div className="border-[4px] border-black bg-zinc-950 rounded-xl flex flex-col overflow-hidden shadow-[8px_8px_0_0_#000] font-mono text-green-400">
+                  <div className="p-4 border-b border-zinc-800 bg-zinc-900 flex justify-between items-center text-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
                       </div>
-                      <div className="space-y-3">
-                        {data.lineItems.map((item) => (
-                          <div key={item.id} className="flex gap-2 items-start">
+                      <span className="ml-2 text-zinc-400 uppercase tracking-widest text-xs font-bold">Extracted Data</span>
+                    </div>
+                    {loading && <Loader2 className="w-4 h-4 animate-spin text-green-400" />}
+                  </div>
+                  
+                  <div className="p-6 flex-1 overflow-auto">
+                    {loading ? (
+                      <div className="flex flex-col items-center justify-center h-full space-y-4">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm">root@omni-parser:~$ extracting_data...</p>
+                      </div>
+                    ) : data ? (
+                      <div className="space-y-6">
+                        <div className="grid grid-cols-2 gap-6">
+                          <div>
+                            <label className="block text-xs uppercase tracking-wider mb-2 text-zinc-500">Merchant Name</label>
                             <input 
                               type="text" 
-                              value={item.description}
-                              onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                              placeholder="Item description"
-                              className="flex-1 p-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
+                              value={data.merchant} 
+                              onChange={(e) => setData({ ...data, merchant: e.target.value })}
+                              className="w-full p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors"
                             />
-                            <div className="relative w-32">
-                              <span className="absolute left-3 top-2.5 text-gray-500">$</span>
-                              <input 
-                                type="number" 
-                                value={item.amount}
-                                onChange={(e) => updateLineItem(item.id, "amount", parseFloat(e.target.value) || 0)}
-                                className="w-full p-2 pl-7 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-gray-900"
-                              />
-                            </div>
-                            <button 
-                              onClick={() => removeLineItem(item.id)}
-                              className="p-2 text-gray-400 hover:text-red-500 transition-colors mt-0.5"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
                           </div>
-                        ))}
-                        {data.lineItems.length === 0 && (
-                          <div className="text-center p-4 border-2 border-dashed rounded-md text-gray-400 text-sm">
-                            No items found. Add manually if needed.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t">
-                      <div className="flex justify-between items-center bg-gray-50 p-4 rounded-lg border">
-                        <span className="font-semibold text-gray-700">Total Amount</span>
-                        <div className="flex items-center gap-4">
-                          {mathMismatch && (
-                            <div className="flex items-center text-amber-600 text-sm font-medium" title={`Sum of items (${sumOfLineItems.toFixed(2)}) does not match Total (${data.totalAmount})`}>
-                              <AlertTriangle className="w-4 h-4 mr-1" />
-                              Math mismatch
-                            </div>
-                          )}
-                          <div className="relative w-32">
-                            <span className="absolute left-3 top-2.5 text-gray-700 font-semibold">$</span>
+                          <div>
+                            <label className="block text-xs uppercase tracking-wider mb-2 text-zinc-500">Date</label>
                             <input 
-                              type="number" 
-                              value={data.totalAmount}
-                              onChange={(e) => setData({ ...data, totalAmount: parseFloat(e.target.value) || 0 })}
-                              className="w-full p-2 pl-7 border rounded-md font-semibold text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                              type="date" 
+                              value={data.date} 
+                              onChange={(e) => setData({ ...data, date: e.target.value })}
+                              className="w-full p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors"
+                              style={{ colorScheme: 'dark' }}
                             />
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
 
-              {data && !loading && (
-                <div className="p-4 border-t border-gray-200 bg-white">
-                  <button 
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex justify-center items-center transition disabled:opacity-70"
-                  >
-                    {saving ? (
-                      <><Loader2 className="w-5 h-5 animate-spin mr-2" /> Saving...</>
-                    ) : (
-                      <><Save className="w-5 h-5 mr-2" /> Save Receipt</>
-                    )}
-                  </button>
+                        <div className="border border-zinc-800 p-4">
+                          <div className="flex justify-between items-center mb-4 border-b border-zinc-800 pb-2">
+                            <label className="text-xs uppercase tracking-wider text-zinc-500">Line Items [Array]</label>
+                            <button onClick={addLineItem} className="text-xs text-green-500 hover:text-green-300 hover:bg-green-500/10 active:bg-green-500/20 rounded px-2 py-1 transition-all">
+                              [+ add_item]
+                            </button>
+                          </div>
+                          <div className="space-y-3 pt-2">
+                            {data.lineItems.map((item, idx) => (
+                              <div key={item.id} className="flex gap-3 items-center group">
+                                <span className="text-zinc-600 text-xs w-4">{idx}:</span>
+                                <input 
+                                  type="text" 
+                                  value={item.description}
+                                  onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                                  placeholder="description"
+                                  className="flex-1 p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
+                                />
+                                <div className="relative w-32 flex items-center">
+                                  <span className="absolute left-3 font-bold text-zinc-500">$</span>
+                                  <input 
+                                    type="number" 
+                                    value={item.amount}
+                                    onChange={(e) => updateLineItem(item.id, "amount", parseFloat(e.target.value) || 0)}
+                                    className="w-full p-2 pl-7 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
+                                  />
+                                </div>
+                                <button 
+                                  onClick={() => removeLineItem(item.id)}
+                                  className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 active:bg-red-500/20 rounded px-2 py-1 transition-all font-bold"
+                                >
+                                  [x]
+                                </button>
+                              </div>
+                            ))}
+                            {data.lineItems.length === 0 && (
+                              <div className="text-center p-4 text-xs text-zinc-600 italic">
+                                // no items found
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="border border-zinc-800 p-4 flex justify-between items-center bg-zinc-900/50">
+                          <span className="text-xs uppercase tracking-wider text-zinc-500">Total Amount</span>
+                          <div className="flex items-center gap-4">
+                            {mathMismatch && (
+                              <div className="text-red-500 text-xs flex items-center gap-1 border border-red-500/30 bg-red-500/10 px-2 py-1" title={`Sum of items (${sumOfLineItems.toFixed(2)}) does not match Total (${data.totalAmount})`}>
+                                <AlertTriangle className="w-3 h-3" />
+                                WARN: sum_mismatch
+                              </div>
+                            )}
+                            <div className="relative w-32 flex items-center">
+                              <span className="absolute left-3 text-zinc-500">$</span>
+                              <input 
+                                type="number" 
+                                value={data.totalAmount}
+                                onChange={(e) => setData({ ...data, totalAmount: parseFloat(e.target.value) || 0 })}
+                                className="w-full p-2 pl-7 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors font-bold text-sm"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {data && !loading && (
+                    <div className="p-4 border-t border-zinc-800 bg-zinc-900">
+                      <button 
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="w-full bg-green-500 hover:bg-green-400 text-black text-sm py-3 font-bold uppercase tracking-widest flex justify-center items-center disabled:opacity-50 transition-colors shadow-none"
+                      >
+                        {saving ? (
+                          <><Loader2 className="w-4 h-4 animate-spin mr-2" /> executing...</>
+                        ) : (
+                          <><Save className="w-4 h-4 mr-2" /> save_record</>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
+          )}
+        </main>
+
+        {/* History Sidebar */}
+        <aside className="w-full lg:w-80 flex-shrink-0 border-[4px] border-dashed border-black rounded-xl bg-white shadow-[8px_8px_0_0_#000] flex flex-col h-[600px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-20 order-3">
+          <div className="p-4 border-b-[4px] border-dashed border-black">
+            <h2 className="font-black text-xl uppercase tracking-widest">History</h2>
           </div>
-        )}
+          <div className="flex-1 overflow-auto p-4 space-y-3 bg-[#f3edff]">
+            {loadingHistory ? (
+              <div className="flex justify-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-black" />
+              </div>
+            ) : history.length === 0 ? (
+              <div className="text-center text-gray-500 font-bold p-8 border-[3px] border-dashed border-gray-300 rounded-lg">
+                No receipts saved yet.
+              </div>
+            ) : (
+              history.map((h) => (
+                <div 
+                  key={h.id} 
+                  onClick={() => setSelectedHistoryReceipt(h)}
+                  className="border-[3px] border-black bg-white rounded-lg p-3 cursor-pointer hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0_0_#000] transition-all"
+                >
+                  <div className="font-black text-sm truncate mb-2">{h.merchant || "Unknown Merchant"}</div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold bg-[#cba8ff] px-2 py-0.5 rounded border-2 border-black">{h.date}</span>
+                    <span className="font-black text-lg text-[#9655ff]">${h.totalAmount.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
+
       </div>
-    </main>
+    </div>
   );
 }
