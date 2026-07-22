@@ -21,7 +21,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReceiptData | null>(null);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
@@ -87,10 +93,10 @@ export default function Home() {
       // Reset
       setPreviewUrl(null);
       setData(null);
-      alert("Receipt saved successfully!");
+      showToast("Receipt saved successfully!", "success");
     } catch (err) {
       console.error(err);
-      alert("Failed to save receipt.");
+      showToast("Failed to save receipt.", "error");
     } finally {
       setSaving(false);
     }
@@ -132,7 +138,14 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <main className="min-h-screen bg-gray-50 p-4 md:p-8 relative">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 text-white font-medium transition-all transform flex items-center gap-2 ${toast.type === "success" ? "bg-green-600" : "bg-red-600"}`}>
+          {toast.message}
+        </div>
+      )}
+      
       <div className="max-w-6xl mx-auto space-y-8">
         <header className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 tracking-tight">OmniReceipt Parser</h1>
