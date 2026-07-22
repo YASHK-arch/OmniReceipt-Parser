@@ -13,6 +13,7 @@ const receiptSchema = z.object({
     })
   ).describe("The list of purchased physical goods or food. Exclude taxes, tips, delivery fees, and handling fees."),
   totalAmount: z.number().describe("The total amount paid on the receipt."),
+  currency: z.string().describe("The currency symbol (e.g. $, ₹, £, €). Default to $ if unknown."),
 });
 
 export async function POST(req: Request) {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(arrayBuffer);
 
     const { object } = await generateObject({
-      model: google("gemini-2.5-flash"),
+      model: google("gemini-flash-latest"),
       schema: receiptSchema,
       messages: [
         {
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
       date: new Date().toISOString().split("T")[0],
       lineItems: [],
       totalAmount: 0,
+      currency: "$",
       _backendError: error instanceof Error ? error.message : String(error),
     });
   }
