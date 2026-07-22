@@ -14,6 +14,7 @@ type ReceiptData = {
   merchant: string;
   date: string;
   totalAmount: number;
+  currency: string;
   lineItems: LineItem[];
 };
 
@@ -22,6 +23,7 @@ type DBReceipt = {
   merchant: string;
   date: string;
   totalAmount: number;
+  currency: string;
   createdAt: string;
   lineItems: Omit<LineItem, 'id'>[];
 };
@@ -96,6 +98,7 @@ export default function Home() {
         merchant: result.merchant || "",
         date: result.date || new Date().toISOString().split("T")[0],
         totalAmount: result.totalAmount || 0,
+        currency: result.currency || "$",
         lineItems: itemsWithIds,
       });
     } catch (err) {
@@ -104,6 +107,7 @@ export default function Home() {
         merchant: "",
         date: new Date().toISOString().split("T")[0],
         totalAmount: 0,
+        currency: "$",
         lineItems: [],
       });
     } finally {
@@ -178,7 +182,9 @@ export default function Home() {
   const brutalBadge = "border-[2px] border-black rounded-md shadow-[2px_2px_0_0_#000] font-bold text-sm bg-[#cfaeff] px-3 py-1 hover:bg-[#b588ff] cursor-pointer transition-colors";
 
   return (
-    <div className="min-h-screen bg-[#f3edff] text-black font-sans flex flex-col border-[4px] border-black selection:bg-[#cfaeff]">
+    <div className="h-screen bg-[#f3edff] flex flex-col font-sans selection:bg-black selection:text-white relative overflow-hidden">
+      {/* Background Elements */}
+      
       <LogViewer />
       
       {/* Toast Notification */}
@@ -188,49 +194,63 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modal for History Item */}
+      {/* History Detail Modal */}
       {selectedHistoryReceipt && (
-        <div className="fixed inset-0 z-[100] bg-black/40 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="border-[4px] border-black bg-white rounded-xl shadow-[8px_8px_0_0_#000] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-4 border-b-[4px] border-black bg-[#cba8ff] flex justify-between items-center">
-              <h2 className="font-black text-xl flex items-center gap-2"><FileText className="w-5 h-5"/> Receipt Details</h2>
-              <button onClick={() => setSelectedHistoryReceipt(null)} className="p-1 hover:bg-black/10 rounded-lg transition-colors border-[2px] border-transparent hover:border-black hover:shadow-[2px_2px_0_0_#000]">
-                <X className="w-5 h-5" strokeWidth={3} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div 
+            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            onClick={() => setSelectedHistoryReceipt(null)}
+          ></div>
+          <div className="relative w-full max-w-xl bg-white border border-zinc-300 rounded shadow-lg flex flex-col max-h-[90vh] font-mono text-zinc-800 text-sm">
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 border-b border-zinc-200 bg-zinc-50">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <span>📄</span> receipt_details.txt
+              </h3>
+              <button 
+                onClick={() => setSelectedHistoryReceipt(null)}
+                className="text-zinc-500 hover:text-black transition-colors"
+              >
+                ✕
               </button>
             </div>
-            <div className="p-6 overflow-auto bg-[#f8f6fc]">
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="border-[3px] border-black p-4 rounded-xl bg-white shadow-[4px_4px_0_0_#000]">
-                  <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Merchant</div>
-                  <div className="font-black text-lg">{selectedHistoryReceipt.merchant || "Unknown"}</div>
+            
+            {/* Body */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              {/* Meta Info */}
+              <div className="grid grid-cols-2 gap-6 border-b border-zinc-200 pb-6">
+                <div>
+                  <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Merchant</div>
+                  <div className="font-medium text-base">{selectedHistoryReceipt.merchant || "Unknown"}</div>
                 </div>
-                <div className="border-[3px] border-black p-4 rounded-xl bg-white shadow-[4px_4px_0_0_#000]">
-                  <div className="text-xs font-black text-gray-500 uppercase tracking-widest mb-1">Date</div>
-                  <div className="font-black text-lg">{selectedHistoryReceipt.date}</div>
+                <div>
+                  <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Date</div>
+                  <div className="font-medium text-base">{selectedHistoryReceipt.date}</div>
                 </div>
               </div>
-              
-              <div className="border-[3px] border-black rounded-xl overflow-hidden mb-6 shadow-[4px_4px_0_0_#000]">
-                <div className="bg-black text-white p-3 font-black uppercase tracking-widest text-sm flex justify-between">
+
+              {/* Line Items */}
+              <div>
+                <div className="text-xs text-zinc-500 uppercase tracking-widest mb-3 flex justify-between">
                   <span>Line Items</span>
                   <span>Amount</span>
                 </div>
-                <div className="bg-white">
+                <div className="space-y-2">
                   {selectedHistoryReceipt.lineItems.map((item, i) => (
-                    <div key={i} className="flex justify-between items-center p-4 border-b-[3px] border-black last:border-0 hover:bg-[#f3edff] transition-colors">
-                      <span className="font-bold flex-1">{item.description}</span>
-                      <span className="font-black text-lg ml-4">${item.amount.toFixed(2)}</span>
+                    <div key={i} className="flex justify-between items-start py-1 border-b border-dashed border-zinc-200 last:border-0">
+                      <span className="flex-1 pr-4">{item.description}</span>
+                      <span className="font-medium whitespace-nowrap">{selectedHistoryReceipt.currency || "$"}{item.amount.toFixed(2)}</span>
                     </div>
                   ))}
                   {selectedHistoryReceipt.lineItems.length === 0 && (
-                    <div className="p-6 text-center font-bold text-gray-500 border-dashed border-2 border-gray-300 m-2 rounded-lg">No items recorded.</div>
+                    <div className="py-2 text-zinc-400 italic">No line items found.</div>
                   )}
                 </div>
               </div>
 
-              <div className="border-[3px] border-black bg-[#fef08a] p-5 rounded-xl flex justify-between items-center shadow-[4px_4px_0_0_#000]">
-                <span className="font-black text-xl uppercase tracking-widest">Total Amount</span>
-                <span className="font-black text-3xl">${selectedHistoryReceipt.totalAmount.toFixed(2)}</span>
+              <div className="border-t-[2px] border-zinc-800 pt-4 flex justify-between items-center mt-6">
+                <span className="font-bold uppercase tracking-widest">Total Amount</span>
+                <span className="font-bold text-xl">{selectedHistoryReceipt.currency || "$"}{selectedHistoryReceipt.totalAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -246,26 +266,26 @@ export default function Home() {
       </div>
 
       {/* Main Layout: Flex Container for Main Content and Sidebars */}
-      <div className="flex-1 w-full max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-8 pt-20 px-4 pb-20 relative z-10">
+      <div className="flex-1 w-full max-w-[1920px] mx-auto flex flex-col xl:flex-row justify-center gap-8 pt-6 px-4 xl:px-8 pb-6 relative z-10 overflow-hidden">
         
         {/* Left Sidebar: Edge Cases */}
-        <aside className="w-full lg:w-72 flex-shrink-0 order-2 lg:order-1">
-          <div className="border-[4px] border-black rounded-xl bg-[#a6f0c6] shadow-[8px_8px_0_0_#000] p-6 lg:sticky lg:top-20">
-            <h2 className="font-black text-2xl mb-4 leading-tight">Test Cases</h2>
-            <p className="font-bold text-sm mb-6 text-black/80">
+        <aside className="w-full xl:w-72 xl:flex-shrink-0 order-2 xl:order-1 h-full overflow-y-auto custom-scrollbar">
+          <div className="border border-zinc-300 bg-white p-6 text-zinc-800 font-mono text-sm shadow-sm xl:mt-14">
+            <h2 className="font-semibold text-lg mb-4 border-b border-zinc-200 pb-2">TestCases.txt</h2>
+            <p className="mb-4 text-zinc-600">
               Try out the standard sample receipt cases in the upload area, or test the parser's limits with these edge case samples:
             </p>
-            <ul className="space-y-3">
+            <ul className="space-y-1">
               {[
-                { name: "Crumpled Receipt", icon: "🗑️" },
-                { name: "Faded Ink Receipt", icon: "👻" },
-                { name: "Handwritten Note", icon: "✍️" },
-                { name: "Super Long Receipt", icon: "📜" },
-                { name: "Non-English Receipt", icon: "🌍" }
+                { name: "Crumpled Receipt", icon: "-" },
+                { name: "Faded Ink Receipt", icon: "-" },
+                { name: "Handwritten Note", icon: "-" },
+                { name: "Super Long Receipt", icon: "-" },
+                { name: "Non-English Receipt", icon: "-" }
               ].map((item, idx) => (
                 <li key={idx}>
-                  <a href="#" className="flex items-center gap-3 p-3 border-[3px] border-black bg-white rounded-lg hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0_0_#000] active:translate-y-0 active:translate-x-0 active:shadow-none transition-all font-bold text-sm">
-                    <span className="text-lg">{item.icon}</span> {item.name}
+                  <a href="#" className="flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-100 transition-colors rounded">
+                    <span className="text-zinc-400">{item.icon}</span> {item.name}
                   </a>
                 </li>
               ))}
@@ -274,9 +294,9 @@ export default function Home() {
         </aside>
 
         {/* Main Workspace Area */}
-        <main className="flex-1 flex flex-col items-center min-w-0 order-1 lg:order-2">
+        <main className="flex-1 w-full flex flex-col items-center min-w-0 order-1 xl:order-2 h-full overflow-y-auto custom-scrollbar px-2">
           {/* Hero Section */}
-          <div className="text-center mb-12 relative z-10 w-full mt-8">
+          <div className="text-center mb-8 relative z-10 w-full mt-2">
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-black tracking-tighter mb-6 leading-tight">
               Receipt to <br /> structured data
             </h1>
@@ -418,7 +438,7 @@ export default function Home() {
                                   className="flex-1 p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
                                 />
                                 <div className="relative w-32 flex items-center">
-                                  <span className="absolute left-3 font-bold text-zinc-500">$</span>
+                                  <span className="absolute left-3 font-bold text-zinc-500">{data.currency || "$"}</span>
                                   <input 
                                     type="number" 
                                     value={item.amount}
@@ -452,7 +472,7 @@ export default function Home() {
                               </div>
                             )}
                             <div className="relative w-32 flex items-center">
-                              <span className="absolute left-3 text-zinc-500">$</span>
+                              <span className="absolute left-3 text-zinc-500">{data.currency || "$"}</span>
                               <input 
                                 type="number" 
                                 value={data.totalAmount}
@@ -488,30 +508,24 @@ export default function Home() {
         </main>
 
         {/* History Sidebar */}
-        <aside className="w-full lg:w-80 flex-shrink-0 border-[4px] border-dashed border-black rounded-xl bg-white shadow-[8px_8px_0_0_#000] flex flex-col h-[600px] lg:h-[calc(100vh-140px)] lg:sticky lg:top-20 order-3">
-          <div className="p-4 border-b-[4px] border-dashed border-black">
-            <h2 className="font-black text-xl uppercase tracking-widest">History</h2>
+        <aside className="w-full xl:w-80 xl:flex-shrink-0 border border-zinc-300 bg-white flex flex-col h-full order-3 font-mono text-sm text-zinc-800 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-zinc-200">
+            <h2 className="font-semibold text-lg">History.txt</h2>
           </div>
-          <div className="flex-1 overflow-auto p-4 space-y-3 bg-[#f3edff]">
-            {loadingHistory ? (
-              <div className="flex justify-center p-8">
-                <Loader2 className="w-8 h-8 animate-spin text-black" />
-              </div>
-            ) : history.length === 0 ? (
-              <div className="text-center text-gray-500 font-bold p-8 border-[3px] border-dashed border-gray-300 rounded-lg">
-                No receipts saved yet.
-              </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-1">
+            {history.length === 0 ? (
+              <p className="text-zinc-500 italic">No history available.</p>
             ) : (
-              history.map((h) => (
+              history.map(h => (
                 <div 
                   key={h.id} 
                   onClick={() => setSelectedHistoryReceipt(h)}
-                  className="border-[3px] border-black bg-white rounded-lg p-3 cursor-pointer hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0_0_#000] transition-all"
+                  className="cursor-pointer py-2.5 px-2 border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors flex flex-col gap-1 rounded"
                 >
-                  <div className="font-black text-sm truncate mb-2">{h.merchant || "Unknown Merchant"}</div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold bg-[#cba8ff] px-2 py-0.5 rounded border-2 border-black">{h.date}</span>
-                    <span className="font-black text-lg text-[#9655ff]">${h.totalAmount.toFixed(2)}</span>
+                  <div className="font-medium truncate">{h.merchant || "Unknown Merchant"}</div>
+                  <div className="flex justify-between items-center text-zinc-500">
+                    <span>{h.date}</span>
+                    <span>{h.currency || "$"}{h.totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
               ))

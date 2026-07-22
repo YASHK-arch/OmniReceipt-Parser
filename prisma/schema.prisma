@@ -17,6 +17,7 @@ model Receipt {
   merchant     String
   date         String     // ISO 8601 format
   totalAmount  Float
+  currency     String     @default("$")
   createdAt    DateTime   @default(now())
   lineItems    LineItem[]
 }
