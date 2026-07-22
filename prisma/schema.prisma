@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Receipt {
+  id           String     @id @default(uuid())
+  merchant     String
+  date         String     // ISO 8601 format
+  totalAmount  Float
+  createdAt    DateTime   @default(now())
+  lineItems    LineItem[]
+}
+
+model LineItem {
+  id           String   @id @default(uuid())
+  description  String
+  amount       Float
+  receiptId    String
+  receipt      Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+}
