@@ -45,3 +45,7 @@ PRD.md
 receipt-parser-take-home.pdf
 
 /src/generated/prisma
+
+# database
+*.db
+*.db-journal
