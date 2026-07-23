@@ -12,16 +12,20 @@ I built a full-stack Next.js web application that takes an image of a physical r
 
 3. **Forcing categorical Enums over Continuous Values:** Instead of just returning a raw confidence score (0-100), the LLM is forced by Zod to output a categorical `imageQualityStatus` enum (e.g., "Poor", "Moderate"). This adds artificial constraints to the LLM but makes rendering conditional UI (like the slide-out Analysis Log warnings) much safer and type-predictable on the frontend compared to trusting raw LLM text output.
 
+
+
+
+
 ### Where did you use an LLM, and for what?
 
-- **During Development:** I used an IDE(Cursor) throughout the development process. Specifically, I used the AI agent to build the responsive frontend UI, set up the Prisma schema and SQLite connection, implement the `Zod` parsing schema for structured LLM outputs, write the API route handlers
+- **During Development:** I used an IDE(Cursor) throughout the development process. Specifically, I used the AI agent to build the frontend UI, set up the Prisma schema and SQLite connection, implement the `Zod` parsing schema for structured LLM outputs, write the API route handlers.
 
 - I designed the History section myself, how pop-ups should be displayed? What data should be displayed in History?
 
 - I architectured the Fallback logic myself, I decided the edge cases, stuctured them into categories, then I designed the Confidence score logic and a Analysis logging system and added categorical enums(discussed in tradeoffs).
 How the Pop-ups should work when there is High confidence score, when confidence score is average, and when score is critically low, should it show the breakdown of how the score was calculated, should it show something else?
 
-- I made the sample Good and bad testcases containers myself, with auto-upload feature on clicking and made ui fixes like disabling other reciept options until the first one gets analyzed completely to prevent rate-limit issues.
+- I made the sample good and bad testcases containers myself, with auto-upload feature on clicking and made ui fixes like disabling other reciept options until the first one gets analyzed completely to prevent rate-limit issues.
 
 
 
@@ -30,9 +34,17 @@ How the Pop-ups should work when there is High confidence score, when confidence
 
 ### What would you do with another week?
 - **Move to a robust, hosted Database:** Migrate from SQLite to Vercel Postgres or Supabase to support actual cloud deployment without data loss.
+
 - **Client-side Image Compression:** Implement an image compression library (like `browser-image-compression`) before the `FormData` upload to ensure high-resolution smartphone photos don't breach Vercel's strict 4.5MB serverless payload limit.
+
 - **Authentication & Multi-tenant Data:** Add NextAuth to allow users to sign in and securely save receipts to their own accounts rather than a global history log.
-- **Automated Testing:** Write Playwright tests for the LLM extraction logic, running the 8 edge-case images through the pipeline in CI to prevent regression in the prompt.
+
+- **Application Version:** I would make the site fully responsive (currently it is made only for desktop), add a direct photo-taking feature instead of upload-only, and convert the app into a PWA (Progressive Web App) so that it can be installed on mobile devices.
+
+- **Multi-Image Feature:** Add support for multi-image uploads and parsing of multiple receipts at once. This is especially important when receipts are too long to fit in a single frame.
+
+- **PDF Parsing:** Add support for parsing PDF files (designed taking into account that nowadays most receipts are generated digitally and are received in PDF format).
+
 
 ### What's one thing in this spec you'd push back on if I were your PM?
 If the spec assumes that extracting strictly "purchased physical goods" as `lineItems` is sufficient to validate the `totalAmount`, I would push back heavily. By excluding taxes, tips, and delivery fees from the extracted data, it becomes mathematically impossible to validate the total amount against the sum of the line items. The system should extract *all* financial line items (including tax/tip) and explicitly categorize them, so we can run a reliable arithmetic check (`sum(items) + tax + tip = total`). Currently, the app warns the user about a "Math Mismatch," but the mismatch is practically guaranteed on any receipt that includes tax, creating a poor and confusing user experience.

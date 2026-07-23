@@ -49,3 +49,9 @@ receipt-parser-take-home.pdf
 # database
 *.db
 *.db-journal
+
+# AI and IDE configs
+.agents
+.claude
+.windsurf
+skills-lock.json
