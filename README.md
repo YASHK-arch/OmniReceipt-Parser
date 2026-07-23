@@ -2,6 +2,7 @@
 
 > A lightweight, full-stack Next.js web application designed to transform photos of physical or digital receipts into structured, editable data using Google's Gemini Vision API and Vercel AI SDK. 
 
+<img width="1277" height="701" alt="image" src="https://github.com/user-attachments/assets/c2fcc017-65f3-4301-bbf8-88902856ebfe" />
 
 ![alt text](1.png)
 
