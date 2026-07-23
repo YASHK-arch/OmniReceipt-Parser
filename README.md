@@ -2,8 +2,18 @@
 
 > A lightweight, full-stack Next.js web application designed to transform photos of physical or digital receipts into structured, editable data using Google's Gemini Vision API and Vercel AI SDK. 
 
+
 ### 🔵 What did I build?
 I built a full-stack Next.js web application that takes an image of a physical receipt, processes it through Google Gemini's multimodal API via the Vercel AI SDK to extract structured JSON data (merchant, date, line items, currency, and total), and saves the validated records to a SQLite database using Prisma. The application includes a React frontend that allows users to upload images or select from a library of integrated test cases, view the parsed data alongside a built-in image clarity confidence score, edit the fields to correct LLM hallucinations, and save the final record to a persistent history log.
+
+![alt text](1.png)
+
+![alt text](2.png)
+
+![alt text](3.png)
+
+![alt text](4.png)
+
 
 ### 🔵 What are the biggest tradeoffs I made, and why?
 
