@@ -24,7 +24,7 @@ I built a full-stack Next.js web application that takes an image of a physical r
 
 
 
-### 🔵 Where did you use an LLM, and for what?
+### 🔵 Where did I use an LLM, and for what?
 
 - **During Development:** I used an IDE(Cursor) throughout the development process. Specifically, I used the AI agent to build the frontend UI, set up the Prisma schema and SQLite connection, implement the `Zod` parsing schema for structured LLM outputs, write the API route handlers.
 
@@ -40,7 +40,8 @@ How the Pop-ups should work when there is High confidence score, when confidence
 
 
 
-### 🔵 What would you do with another week?
+### 🔵 What would I do with another week?
+
 - **Move to a robust, hosted Database:** Migrate from SQLite to Vercel Postgres or Supabase to support actual cloud deployment without data loss.
 
 - **Client-side Image Compression:** Implement an image compression library (like `browser-image-compression`) before the `FormData` upload to ensure high-resolution smartphone photos don't breach Vercel's strict 4.5MB serverless payload limit.
@@ -54,7 +55,7 @@ How the Pop-ups should work when there is High confidence score, when confidence
 - **PDF Parsing:** Add support for parsing PDF files (designed taking into account that nowadays most receipts are generated digitally and are received in PDF format).
 
 
-### 🔵 What's one thing in this spec you'd push back on if I were your PM?
+### 🔵 What's one thing in this spec I'd push back on if I were your PM?
 I would strongly push back on the instruction to only extract *(name + amount)* for the line items. While I agree with the product decision to exclude internal granular details like taxes and discounts to keep the UX clean, capturing the item quantity is essential.
 
 If you look at standard e-commerce or grocery invoices (like Amazon or Blinkit), they explicitly break down purchases as: **Unit Price × Quantity = Net Amount**. To save space and avoid redundant database entries, modern receipts do not list duplicate items on separate lines. Instead, they list the item name once alongside separate quantity, unit price, and total amount columns.
