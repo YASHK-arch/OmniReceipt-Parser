@@ -6,11 +6,17 @@ A lightweight, full-stack Next.js web application designed to transform photos o
 I built a full-stack Next.js web application that takes an image of a physical receipt, processes it through Google Gemini's multimodal API via the Vercel AI SDK to extract structured JSON data (merchant, date, line items, currency, and total), and saves the validated records to a SQLite database using Prisma. The application includes a React frontend that allows users to upload images or select from a library of integrated test cases, view the parsed data alongside a built-in image clarity confidence score, edit the fields to correct LLM hallucinations, and save the final record to a persistent history log.
 
 ### What are the biggest tradeoffs you made, and why?
-1. **Using SQLite with Prisma vs. a Hosted Database:** For this take-home project, I opted for a local SQLite database (`dev.db`). While this breaks persistency if deployed to Vercel's serverless environment, it drastically simplified local setup and review for the hiring team by not requiring them to provision external Postgres credentials or run Docker containers.
+1. **Using SQLite with Prisma vs. a Hosted Database:** For this take-home project, I opted for a local SQLite database (`dev.db`). While this breaks persistency if deployed to Vercel's serverless environment, it drastically simplified local setup and review for yours reviewing team by not requiring them to provision external Postgres credentials or run Docker containers.
 
-2. **Heavy reliance on Client-Side state for Test Cases:** The test case folders (`good_testcases`, `low_quality_edge_testcases`) are exposed via the `public` directory, and their structure is hardcoded in the frontend rather than dynamically parsed via Node.js `fs`. This tradeoff sacrificed some flexibility but eliminated the need for complex API routes or SSR just to read file directories, keeping the frontend fast and decoupled.
+2. **Forcing categorical Enums over Continuous Values:** Instead of just returning a raw confidence score (0-100), the LLM is forced by Zod to output a categorical `imageQualityStatus` enum (e.g., "Poor", "Moderate"). This adds artificial constraints to the LLM but makes rendering conditional UI (like the slide-out Analysis Log warnings) much safer and type-predictable on the frontend compared to trusting raw LLM text output.This approach may look a bit weird for the users, as it is not a widely used approach, but for development its a good method from my pov as I know how images got classified?, why they got rejected? and why they got approved? If got a low score , then what fields of data it couldn't find?
 
-3. **Forcing categorical Enums over Continuous Values:** Instead of just returning a raw confidence score (0-100), the LLM is forced by Zod to output a categorical `imageQualityStatus` enum (e.g., "Poor", "Moderate"). This adds artificial constraints to the LLM but makes rendering conditional UI (like the slide-out Analysis Log warnings) much safer and type-predictable on the frontend compared to trusting raw LLM text output.
+     - This approach helped to handle a edge case, where specifically no currency was mentioned directly, currency was decided by the address of the merchant, well this assumption made by LLM may not be true everytime, but this approach helps in parsing in testcases where we get some capture distortion in images or some part of reciept got cropped or not visble properly in image
+
+     - Sometimes its possible that date can be mentioned twice at different locations, if one position looks distorted and it can't be made clear what exactly is written, then we have another position from where it can be inferred, this ensures that we don't miss out on any information
+
+3. **Exclusion of taxes/fees from line items:** Receipts like Blinkit and Zomato mix physical goods with handling fees, surge pricing, and GST. I decided to instruct the LLM strictly to exclude these from the lineItems array. The tradeoff is that the sum of line items rarely matches the receipt total, triggering my UI's "Math Mismatch" warning constantly. I defend this because it forces the user to manually verify if the missing amount is a standard tax or if the LLM hallucinated/missed a physical item, ensuring higher data integrity.
+
+    - for this I could have added other fields to allow all details to be added, but this could be inconstent with other reciepts, for example some reciepts don't have taxes/fees mentioned, some may implement different taxation systems, different calculation methods, and also reciept could be just for a single item, where breakdown is not necessary. So to make the parser consistent and also handle various types of reciepts this was the best approach from my pov. 
 
 
 
@@ -47,11 +53,10 @@ How the Pop-ups should work when there is High confidence score, when confidence
 
 
 ### What's one thing in this spec you'd push back on if I were your PM?
-If the spec assumes that extracting strictly "purchased physical goods" as `lineItems` is sufficient to validate the `totalAmount`, I would push back heavily. By excluding taxes, tips, and delivery fees from the extracted data, it becomes mathematically impossible to validate the total amount against the sum of the line items. The system should extract *all* financial line items (including tax/tip) and explicitly categorize them, so we can run a reliable arithmetic check (`sum(items) + tax + tip = total`). Currently, the app warns the user about a "Math Mismatch," but the mismatch is practically guaranteed on any receipt that includes tax, creating a poor and confusing user experience.
+I would strongly push back on the instruction to only extract *(name + amount)* for the line items. While I agree with the product decision to exclude internal granular details like taxes and discounts to keep the UX clean, capturing the item quantity is essential.
 
-## Getting Started
+If you look at standard e-commerce or grocery invoices (like Amazon or Blinkit), they explicitly break down purchases as: **Unit Price × Quantity = Net Amount**. To save space and avoid redundant database entries, modern receipts do not list duplicate items on separate lines. Instead, they list the item name once alongside separate quantity, unit price, and total amount columns.
 
-1. Clone the repository and run `npm install`.
-2. Copy `.env.example` to `.env` and add your `GOOGLE_GENERATIVE_AI_API_KEY`.
-3. Run `npx prisma db push` to initialize the local SQLite database.
-4. Run `npm run dev` to start the development server.
+> If a user buys 4 bottles of liquid cleaner for *₹400 total*, the current spec forces the app to extract **{ name: "cleaner", amount: 400 }**. This destroys crucial consumer context, making it look like they bought one ridiculously expensive item. By underspecifying these fields in the take-home PDF, we lose data that is highly relevant to the consumer. Without extracting the quantity and the original per-unit price, the app fails to help users do meaningful price-tracking or spot price hikes over time. A receipt tool designed for consumers must track how many items were bought, not just the final lumped sum.
+
+
