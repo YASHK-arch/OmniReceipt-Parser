@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Upload, X, Plus, AlertTriangle, Save, Loader2, Sparkles, Code, Moon, Search, FileText } from "lucide-react";
+import { Upload, X, Plus, AlertTriangle, Save, Loader2, Sparkles, Code, Moon, Search, FileText, Activity } from "lucide-react";
 import LogViewer from "@/components/LogViewer";
 
 type LineItem = {
@@ -16,6 +16,10 @@ type ReceiptData = {
   totalAmount: number;
   currency: string;
   lineItems: LineItem[];
+  confidenceScore?: number;
+  imageQualityStatus?: string;
+  analysisSummary?: string;
+  missingFields?: string[];
 };
 
 type DBReceipt = {
@@ -28,12 +32,33 @@ type DBReceipt = {
   lineItems: Omit<LineItem, 'id'>[];
 };
 
+const badTestCases = [
+  { folder: "1. The receipt is damaged, i.e. part of the receipt is teared or wet", shortName: "Damaged Receipt", images: ["1.png", "2.png"] },
+  { folder: "2. The receipt text is unclear, i.e. printing issues", shortName: "Unclear Text", images: ["1.png", "2.jpg"] },
+  { folder: "3. The receipt is placed on backgrounds that could interfere with text extraction, like newspapers, magazine or other receipts", shortName: "Background Interference", images: ["1.png"] },
+  { folder: "4. The camera is off focus making the picture visibly blurry", shortName: "Blurry Picture", images: ["1.jpeg", "2.png"] },
+  { folder: "5. The camera is too far away from the receipt", shortName: "Camera Too Far", images: ["1.png"] },
+  { folder: "6. The picture has more than 1 receipts in the frame", shortName: "Multiple Receipts", images: ["1.png"] },
+  { folder: "7. The receipt picture was taken on an angle and placed on uneven surface", shortName: "Angled / Uneven Surface", images: ["1.png", "2.png"] },
+  { folder: "8. Pixel resolution related distortion", shortName: "Resolution Distortion", images: ["1.webp", "2.png"] }
+];
+
+const goodTestCases = [
+  { file: "Amazon_reciept_digital.png", shortName: "Amazon" },
+  { file: "Blinkit digital reciept.png", shortName: "Blinkit" },
+  { file: "good_quality_unkown_lang.jpg", shortName: "Unknown Lang" },
+  { file: "higlighted_text_n_currency_not_specific.jpg", shortName: "Highlighted Text" },
+  { file: "Well-Lit_clicked_restaurant_reciept.jpg", shortName: "Restaurant" }
+];
+
 export default function Home() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReceiptData | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showAnalysisLog, setShowAnalysisLog] = useState(false);
+  const [hoveredTestImg, setHoveredTestImg] = useState<{url: string, x: number, y: number} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // History state
@@ -98,19 +123,49 @@ export default function Home() {
         merchant: result.merchant || "",
         date: result.date || new Date().toISOString().split("T")[0],
         totalAmount: result.totalAmount || 0,
-        currency: result.currency || "$",
+        currency: result.currency || "🪙",
         lineItems: itemsWithIds,
+        confidenceScore: result.confidenceScore || 0,
+        imageQualityStatus: result.imageQualityStatus || "Extremely Poor",
+        analysisSummary: result.analysisSummary || "",
+        missingFields: result.missingFields || [],
       });
+      
+      if (result.confidenceScore !== undefined && result.confidenceScore < 90) {
+        setShowAnalysisLog(true);
+      } else {
+        setShowAnalysisLog(false);
+      }
     } catch (err) {
       console.error(err);
       setData({
         merchant: "",
         date: new Date().toISOString().split("T")[0],
         totalAmount: 0,
-        currency: "$",
+        currency: "🪙",
         lineItems: [],
+        confidenceScore: 0,
+        imageQualityStatus: "Extremely Poor",
+        analysisSummary: "Failed to process image due to a network or client error.",
+        missingFields: ["merchant", "date", "lineItems", "totalAmount"],
       });
+      setShowAnalysisLog(true);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAndProcessTestCase = async (url: string, filename: string) => {
+    setLoading(true);
+    setPreviewUrl(url);
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
+      await processImage(file);
+    } catch (err) {
+      console.error("Failed to load test case image", err);
+      showToast("Failed to load test case image", "error");
       setLoading(false);
     }
   };
@@ -239,7 +294,7 @@ export default function Home() {
                   {selectedHistoryReceipt.lineItems.map((item, i) => (
                     <div key={i} className="flex justify-between items-start py-1 border-b border-dashed border-zinc-200 last:border-0">
                       <span className="flex-1 pr-4">{item.description}</span>
-                      <span className="font-medium whitespace-nowrap">{selectedHistoryReceipt.currency || "$"}{item.amount.toFixed(2)}</span>
+                      <span className="font-medium whitespace-nowrap">{selectedHistoryReceipt.currency || "🪙"}{item.amount.toFixed(2)}</span>
                     </div>
                   ))}
                   {selectedHistoryReceipt.lineItems.length === 0 && (
@@ -250,7 +305,7 @@ export default function Home() {
 
               <div className="border-t-[2px] border-zinc-800 pt-4 flex justify-between items-center mt-6">
                 <span className="font-bold uppercase tracking-widest">Total Amount</span>
-                <span className="font-bold text-xl">{selectedHistoryReceipt.currency || "$"}{selectedHistoryReceipt.totalAmount.toFixed(2)}</span>
+                <span className="font-bold text-xl">{selectedHistoryReceipt.currency || "🪙"}{selectedHistoryReceipt.totalAmount.toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -258,11 +313,74 @@ export default function Home() {
       )}
 
       {/* Logo */}
-      <div className="absolute top-6 left-8 z-50">
+      <div className="absolute top-6 left-8 z-50 flex items-start gap-6">
         <div className="flex items-center font-black text-2xl tracking-tight">
           <span>Omni</span>
           <span className="text-[#9655ff]">Parser</span>
         </div>
+        
+        {data && (
+          <div className="relative">
+            <button 
+              onClick={() => setShowAnalysisLog(!showAnalysisLog)}
+              className="flex items-center gap-2 border-[2px] border-black rounded shadow-[2px_2px_0_0_#000] font-bold text-sm bg-white px-3 py-1 hover:bg-zinc-100 transition-colors"
+            >
+              <Activity className="w-4 h-4" /> 
+              Analysis Log
+              {data.confidenceScore !== undefined && (
+                <span className={`ml-2 px-1.5 py-0.5 text-xs text-white border-[2px] border-black shadow-[1px_1px_0_0_#000] rounded ${
+                  data.confidenceScore >= 90 ? 'bg-green-500' :
+                  data.confidenceScore >= 70 ? 'bg-yellow-500' :
+                  data.confidenceScore >= 40 ? 'bg-orange-500' : 'bg-red-500'
+                }`}>
+                  {data.confidenceScore}%
+                </span>
+              )}
+            </button>
+
+            {/* Analysis Log Slide-out */}
+            {showAnalysisLog && (
+              <div className="absolute top-full left-0 mt-3 w-80 bg-white border-[3px] border-black shadow-[4px_4px_0_0_#000] z-50 flex flex-col font-mono text-sm">
+                <div className="p-3 border-b-[3px] border-black bg-[#cfaeff] font-bold uppercase tracking-wider flex justify-between items-center">
+                  <span>Analysis Report</span>
+                  <button onClick={() => setShowAnalysisLog(false)} className="hover:bg-black/10 p-1 rounded transition-colors"><X className="w-4 h-4" /></button>
+                </div>
+                <div className="p-4 space-y-4">
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Quality Status</div>
+                    <div className="font-bold">{data.imageQualityStatus || "Unknown"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Summary</div>
+                    <div className="text-sm leading-relaxed">{data.analysisSummary || "No summary provided."}</div>
+                  </div>
+                  {data.missingFields && data.missingFields.length > 0 && (
+                    <div>
+                      <div className="text-xs text-zinc-500 uppercase tracking-widest mb-1">Missing Fields</div>
+                      <div className="flex flex-wrap gap-1">
+                        {data.missingFields.map(f => (
+                          <span key={f} className="text-xs bg-[#ffcfcf] border-[2px] border-black shadow-[1px_1px_0_0_#000] font-bold px-1.5 py-0.5 rounded">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {data.confidenceScore !== undefined && data.confidenceScore < 90 && (
+                    <div className="bg-[#fff1c7] border-[2px] border-black shadow-[2px_2px_0_0_#000] p-3 text-sm font-medium rounded-lg mt-2">
+                      {data.confidenceScore < 40 
+                        ? "We couldn't read the receipt because the image quality is too poor. Please upload a clearer photo with the entire receipt visible and in focus."
+                        : data.confidenceScore < 70
+                          ? "This image appears blurry or distorted. Some information may be inaccurate or incomplete. Please retake the photo using better lighting and keep the camera steady."
+                          : "Some portions of your receipt are cropped or unclear. We extracted all visible information, but certain details could not be recovered. For the most accurate results, please upload a clearer image."
+                      }
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Layout: Flex Container for Main Content and Sidebars */}
@@ -275,21 +393,33 @@ export default function Home() {
             <p className="mb-4 text-zinc-600">
               Try out the standard sample receipt cases in the upload area, or test the parser's limits with these edge case samples:
             </p>
-            <ul className="space-y-1">
-              {[
-                { name: "Crumpled Receipt", icon: "-" },
-                { name: "Faded Ink Receipt", icon: "-" },
-                { name: "Handwritten Note", icon: "-" },
-                { name: "Super Long Receipt", icon: "-" },
-                { name: "Non-English Receipt", icon: "-" }
-              ].map((item, idx) => (
-                <li key={idx}>
-                  <a href="#" className="flex items-center gap-2 py-1.5 px-2 hover:bg-zinc-100 transition-colors rounded">
-                    <span className="text-zinc-400">{item.icon}</span> {item.name}
-                  </a>
-                </li>
+            <div className="space-y-4 mt-2">
+              {badTestCases.map((tc, idx) => (
+                <div key={idx} className="flex flex-col gap-1.5">
+                  <div className="text-zinc-700 font-bold text-xs" title={tc.folder}>- {tc.shortName}</div>
+                  <div className="flex gap-2 pl-4">
+                    {tc.images.map((img, imgIdx) => {
+                      const url = `/testcases/low_quality_edge_testcases/${encodeURIComponent(tc.folder)}/${encodeURIComponent(img)}`;
+                      return (
+                        <button
+                          key={imgIdx}
+                          disabled={loading}
+                          onClick={() => loadAndProcessTestCase(url, img)}
+                          onMouseEnter={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setHoveredTestImg({ url, x: rect.right + 10, y: rect.top - 20 });
+                          }}
+                          onMouseLeave={() => setHoveredTestImg(null)}
+                          className="text-xs bg-zinc-100 border border-zinc-300 hover:bg-zinc-200 disabled:opacity-50 transition-colors px-2 py-1 rounded shadow-sm font-bold"
+                        >
+                          Img {imgIdx + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         </aside>
 
@@ -330,11 +460,20 @@ export default function Home() {
               <div className="mb-6">
                 <p className="text-sm font-bold text-gray-800 mb-3">Try these example receipts:</p>
                 <div className="flex flex-wrap gap-3">
-                  <button className={brutalBadge}>Walmart</button>
-                  <button className={brutalBadge}>Target</button>
-                  <button className={brutalBadge}>Whole Foods</button>
-                  <button className={brutalBadge}>Home Depot</button>
-                  <button className={brutalBadge}>Starbucks</button>
+                  {goodTestCases.map((tc, idx) => {
+                    const url = `/testcases/good_testcases/${encodeURIComponent(tc.file)}`;
+                    return (
+                      <button 
+                        key={idx} 
+                        disabled={loading}
+                        onClick={() => loadAndProcessTestCase(url, tc.file)}
+                        title={tc.file}
+                        className={`${brutalBadge} disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {tc.shortName}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -426,39 +565,41 @@ export default function Home() {
                               [+ add_item]
                             </button>
                           </div>
-                          <div className="space-y-3 pt-2">
-                            {data.lineItems.map((item, idx) => (
-                              <div key={item.id} className="flex gap-3 items-center group">
-                                <span className="text-zinc-600 text-xs w-4">{idx}:</span>
-                                <input 
-                                  type="text" 
-                                  value={item.description}
-                                  onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
-                                  placeholder="description"
-                                  className="flex-1 p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
-                                />
-                                <div className="relative w-32 flex items-center">
-                                  <span className="absolute left-3 font-bold text-zinc-500">{data.currency || "$"}</span>
+                          <div className="space-y-3 pt-2 overflow-x-auto pb-2">
+                            <div className="min-w-[400px]">
+                              {data.lineItems.map((item, idx) => (
+                                <div key={item.id} className="flex gap-3 items-center group mb-3 last:mb-0">
+                                  <span className="text-zinc-600 text-xs w-4 shrink-0">{idx}:</span>
                                   <input 
-                                    type="number" 
-                                    value={item.amount}
-                                    onChange={(e) => updateLineItem(item.id, "amount", parseFloat(e.target.value) || 0)}
-                                    className="w-full p-2 pl-7 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
+                                    type="text" 
+                                    value={item.description}
+                                    onChange={(e) => updateLineItem(item.id, "description", e.target.value)}
+                                    placeholder="description"
+                                    className="flex-1 min-w-[120px] p-2 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
                                   />
+                                  <div className="relative w-32 flex-shrink-0 flex items-center">
+                                    <span className="absolute left-3 font-bold text-zinc-500">{data.currency || "🪙"}</span>
+                                    <input 
+                                      type="number" 
+                                      value={item.amount}
+                                      onChange={(e) => updateLineItem(item.id, "amount", parseFloat(e.target.value) || 0)}
+                                      className="w-full p-2 pl-8 bg-zinc-900 border border-zinc-800 text-green-400 outline-none focus:border-green-500 transition-colors text-sm"
+                                    />
+                                  </div>
+                                  <button 
+                                    onClick={() => removeLineItem(item.id)}
+                                    className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 active:bg-red-500/20 rounded px-2 py-1 transition-all font-bold shrink-0"
+                                  >
+                                    [x]
+                                  </button>
                                 </div>
-                                <button 
-                                  onClick={() => removeLineItem(item.id)}
-                                  className="text-zinc-500 hover:text-red-400 hover:bg-red-500/10 active:bg-red-500/20 rounded px-2 py-1 transition-all font-bold"
-                                >
-                                  [x]
-                                </button>
-                              </div>
-                            ))}
-                            {data.lineItems.length === 0 && (
-                              <div className="text-center p-4 text-xs text-zinc-600 italic">
-                                // no items found
-                              </div>
-                            )}
+                              ))}
+                              {data.lineItems.length === 0 && (
+                                <div className="text-center p-4 text-xs text-zinc-600 italic">
+                                  // no items found
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -471,8 +612,8 @@ export default function Home() {
                                 WARN: sum_mismatch
                               </div>
                             )}
-                            <div className="relative w-32 flex items-center">
-                              <span className="absolute left-3 text-zinc-500">{data.currency || "$"}</span>
+                            <div className="relative w-32 flex-shrink-0 flex items-center">
+                              <span className="absolute left-3 text-zinc-500">{data.currency || "🪙"}</span>
                               <input 
                                 type="number" 
                                 value={data.totalAmount}
@@ -525,13 +666,23 @@ export default function Home() {
                   <div className="font-medium truncate">{h.merchant || "Unknown Merchant"}</div>
                   <div className="flex justify-between items-center text-zinc-500">
                     <span>{h.date}</span>
-                    <span>{h.currency || "$"}{h.totalAmount.toFixed(2)}</span>
+                    <span>{h.currency || "🪙"}{h.totalAmount.toFixed(2)}</span>
                   </div>
                 </div>
               ))
             )}
           </div>
         </aside>
+
+        {hoveredTestImg && (
+          <div 
+            className="fixed z-[100] border-[2px] border-black bg-white shadow-[4px_4px_0_0_#000] p-1 pointer-events-none rounded"
+            style={{ top: hoveredTestImg.y, left: hoveredTestImg.x, width: '250px' }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={hoveredTestImg.url} alt="Preview" className="w-full h-auto object-contain" />
+          </div>
+        )}
 
       </div>
     </div>
