@@ -11,7 +11,7 @@ export async function POST(req: Request) {
         date: String(data.date || new Date().toISOString().split("T")[0]),
         // DEFENSIVE: coerce strings from HTML inputs → Float for SQLite
         totalAmount: parseFloat(data.totalAmount) || 0,
-        currency: String(data.currency || "$"),
+        currency: String(data.currency || "🪙"),
         lineItems: {
           create: (data.lineItems || []).map(
             (item: { description: string; amount: number | string }) => ({
