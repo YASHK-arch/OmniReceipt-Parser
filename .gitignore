@@ -44,6 +44,7 @@ next-env.d.ts
 # project specific
 PRD.md
 receipt-parser-take-home.pdf
+interview.md
 
 /src/generated/prisma
 
