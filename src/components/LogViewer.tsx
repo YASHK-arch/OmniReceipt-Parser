@@ -1,8 +1,24 @@
+/**
+ * Component: LogViewer
+ * 
+ * Functionality:
+ * A floating UI component that intercepts console.log, console.warn, and console.error
+ * calls from the application, displaying them in a stylized overlay. 
+ * This is primarily used to surface client-side errors and warnings to the user
+ * during edge-case receipt testing without needing to open the browser dev tools.
+ */
+
+// ==========================================
+// 1. IMPORTS & DEPENDENCIES
+// ==========================================
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import { Terminal, X, AlertCircle, Info, AlertTriangle } from "lucide-react";
 
+// ==========================================
+// 2. TYPE DEFINITIONS
+// ==========================================
 export type LogEntry = {
   id: string;
   type: "log" | "warn" | "error";
@@ -10,12 +26,23 @@ export type LogEntry = {
   timestamp: Date;
 };
 
+// ==========================================
+// 3. MAIN COMPONENT (LOG VIEWER)
+// ==========================================
 export default function LogViewer() {
+  // --- State Declarations ---
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [hasNewError, setHasNewError] = useState(false);
   const endOfLogsRef = useRef<HTMLDivElement>(null);
 
+  // ==========================================
+  // 4. CONSOLE INTERCEPTION
+  // ==========================================
+  /**
+   * Overrides global console methods to capture logs in local state,
+   * while still passing them through to the original browser console.
+   */
   useEffect(() => {
     const originalLog = console.log;
     const originalWarn = console.warn;
@@ -45,6 +72,10 @@ export default function LogViewer() {
     };
   }, []);
 
+  // ==========================================
+  // 5. AUTO-SCROLL BEHAVIOR
+  // ==========================================
+  /** Scrolls to the bottom of the log list when new logs arrive while open. */
   useEffect(() => {
     if (isOpen) {
       endOfLogsRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,6 +83,9 @@ export default function LogViewer() {
     }
   }, [logs, isOpen]);
 
+  // ==========================================
+  // 6. RENDER & UI COMPONENTS
+  // ==========================================
   const errorCount = logs.filter(l => l.type === "error").length;
 
   return (

@@ -1,9 +1,27 @@
+/**
+ * Frontend: Main Page (Home)
+ * 
+ * Functionality:
+ * This is the primary user interface for the OmniReceipt Parser. It allows users to:
+ * - Upload receipt images or select from predefined test cases.
+ * - Send images to the backend API (/api/parse) for AI-based extraction.
+ * - View, edit, and validate the extracted structured data.
+ * - Save the verified receipt data to the database (/api/receipts).
+ * - View a history of previously saved receipts.
+ */
+
+// ==========================================
+// 1. IMPORTS & DEPENDENCIES
+// ==========================================
 "use client";
 
 import { useState, useRef, useEffect } from "react";
 import { Upload, X, Plus, AlertTriangle, Save, Loader2, Sparkles, Code, Moon, Search, FileText, Activity } from "lucide-react";
 import LogViewer from "@/components/LogViewer";
 
+// ==========================================
+// 2. TYPE DEFINITIONS
+// ==========================================
 type LineItem = {
   id: string; // for React key
   description: string;
@@ -32,6 +50,10 @@ type DBReceipt = {
   lineItems: Omit<LineItem, 'id'>[];
 };
 
+// ==========================================
+// 3. CONSTANTS & TEST CASES
+// ==========================================
+/** Predefined edge-case receipts for testing parser resilience */
 const badTestCases = [
   { folder: "1. The receipt is damaged, i.e. part of the receipt is teared or wet", shortName: "Damaged Receipt", images: ["1.png", "2.png"] },
   { folder: "2. The receipt text is unclear, i.e. printing issues", shortName: "Unclear Text", images: ["1.png", "2.jpg"] },
@@ -51,7 +73,11 @@ const goodTestCases = [
   { file: "Well-Lit_clicked_restaurant_reciept.jpg", shortName: "Restaurant" }
 ];
 
+// ==========================================
+// 4. MAIN COMPONENT (HOME)
+// ==========================================
 export default function Home() {
+  // --- State Declarations ---
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ReceiptData | null>(null);
@@ -98,6 +124,12 @@ export default function Home() {
     }
   };
 
+  // ==========================================
+  // 5. CORE LOGIC: IMAGE PROCESSING
+  // ==========================================
+  /**
+   * Sends the selected image to the /api/parse endpoint and updates state with the result.
+   */
   const processImage = async (selectedFile: File) => {
     setLoading(true);
     const formData = new FormData();
@@ -173,6 +205,12 @@ export default function Home() {
   const sumOfLineItems = data?.lineItems.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0;
   const mathMismatch = data ? Math.abs(sumOfLineItems - (data.totalAmount || 0)) > 0.01 : false;
 
+  // ==========================================
+  // 6. CORE LOGIC: DATABASE SAVING
+  // ==========================================
+  /**
+   * Submits the reviewed receipt data to the /api/receipts endpoint for storage.
+   */
   const handleSave = async () => {
     if (!data) return;
     setSaving(true);
@@ -232,6 +270,9 @@ export default function Home() {
     });
   };
 
+  // ==========================================
+  // 7. RENDER & UI COMPONENTS
+  // ==========================================
   // Neo-brutalist style classes
   const brutalContainer = "border-[3px] border-black rounded-xl shadow-[8px_8px_0_0_#000] bg-[#e4d4ff]";
   const brutalBadge = "border-[2px] border-black rounded-md shadow-[2px_2px_0_0_#000] font-bold text-sm bg-[#cfaeff] px-3 py-1 hover:bg-[#b588ff] cursor-pointer transition-colors";

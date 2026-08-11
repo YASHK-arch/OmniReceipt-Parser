@@ -1,8 +1,32 @@
+/**
+ * API Endpoint: /api/parse
+ * Method: POST
+ * 
+ * Functionality:
+ * This endpoint receives an image file (receipt) via multipart/form-data,
+ * processes it using the Google Gemini AI model to extract structured data
+ * (merchant, date, line items, total amount, etc.), and returns the parsed
+ * information as a JSON object. It also provides an analysis summary and
+ * confidence score regarding the image quality.
+ */
+
+// ==========================================
+// 1. IMPORTS & DEPENDENCIES
+// ==========================================
 import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 
+// ==========================================
+// 2. SCHEMA DEFINITION
+// ==========================================
+/**
+ * Zod schema defining the expected structure of the parsed receipt data.
+ * This schema is passed to the AI model to ensure the output matches
+ * the required types and fields. It includes descriptions to guide the AI
+ * on how to extract specific pieces of information.
+ */
 const receiptSchema = z.object({
   merchant: z.string().describe("The name of the merchant or store."),
   date: z.string().describe("The date of the receipt in ISO 8601 format (YYYY-MM-DD). If not found, leave empty."),
@@ -20,8 +44,21 @@ const receiptSchema = z.object({
   missingFields: z.array(z.string()).describe("List of fields that were partially or completely unreadable and could not be extracted (e.g., ['date', 'lineItems'])."),
 });
 
+// ==========================================
+// 3. API ROUTE HANDLER
+// ==========================================
+/**
+ * POST Handler for the /api/parse endpoint.
+ * 
+ * @param req - The incoming HTTP request containing the form data with the image file.
+ * @returns A JSON response containing the parsed receipt data or an error/fallback response.
+ */
 export async function POST(req: Request) {
   try {
+    // ==========================================
+    // 3a. REQUEST PARSING
+    // ==========================================
+    // Extract the file from the incoming multipart/form-data request
     const formData = await req.formData();
     const file = formData.get("file") as File;
 
@@ -29,9 +66,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "File is required" }, { status: 400 });
     }
 
+    // Convert the File object to a Buffer for the AI SDK
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // ==========================================
+    // 3b. AI PROCESSING (GEMINI VISION)
+    // ==========================================
+    // Call the Gemini model to analyze the image and generate a structured object
+    // matching the receiptSchema.
     const { object } = await generateObject({
       model: google("gemini-flash-latest"),
       schema: receiptSchema,
@@ -59,8 +102,14 @@ IMPORTANT: Provide an analysis log and confidence score.
       ],
     });
 
+    // ==========================================
+    // 3c. SUCCESS RESPONSE
+    // ==========================================
     return NextResponse.json(object);
   } catch (error) {
+    // ==========================================
+    // 3d. ERROR HANDLING & FALLBACK
+    // ==========================================
     console.error("Error parsing receipt:", error);
     // Graceful fallback as per PRD
     return NextResponse.json({
